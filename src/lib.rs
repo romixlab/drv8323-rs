@@ -27,4 +27,4 @@ mod device;
 mod registers;
 mod faults;
 pub use device::DRV8323;
-pub use faults::{DrvResult, DrvFault, Drv8323Error};
+pub use faults::{DrvFault};

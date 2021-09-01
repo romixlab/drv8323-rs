@@ -1,11 +1,5 @@
-pub type DrvResult<T = ()> = Result<T, Drv8323Error>;
 
-#[derive(Debug)]
-pub enum Drv8323Error {
-    SpiErr,
-    PinErr,
-    DrvFault,
-}
+
 
 #[derive(Debug)]
 pub enum DrvFault {
