@@ -27,7 +27,7 @@ pub type DrvResult<T = ()> = Result<T, DrvError>;
 
 impl<SPI, CS, EN, CAL, FAULT, SpiErr, PinErr, DELAY> DRV8323<SPI, CS, EN, CAL, FAULT, DELAY>
 where 
-    SPI: spi::Transfer<u8, Error = SpiErr> + spi::Write<u8, Error = SpiErr>,
+    SPI: spi::Transfer<u16, Error = SpiErr> + spi::Write<u16, Error = SpiErr>,
     CS: OutputPin<Error = PinErr>,
     EN: OutputPin<Error = PinErr>,
     CAL: OutputPin<Error = PinErr>,
@@ -55,9 +55,6 @@ where
             nfault_pin: nfault,
             delay,
         };
-        for _ in 0..10 {
-            let ocp_control = Self::read_register(&mut drv, DrvRegister::OcpControl)?;
-        }
         let ocp_control = Self::read_register(&mut drv, DrvRegister::OcpControl)?;
         if ocp_control != 0b0_01_01_01_1001 {
             return Err(DrvError::SpiIsBroken(ocp_control));
@@ -75,21 +72,16 @@ where
 
     fn read_register(&mut self, reg: DrvRegister) -> DrvResult<u16> {
         self.chip_select_pin.set_low().ok();
-        let rw_flag = 0b1;
-        let msb = (rw_flag << 7) | (reg.addr() << 3);
-        let mut transfer_buffer: [u8; 2];
-        transfer_buffer = [msb, 0];
+        let rw_flag = 1u16;
+        let read_command = (rw_flag << 15) | ((reg.addr() as u16) << 11);
+        let mut transfer_buffer = [read_command];
 
         self.spi.transfer(&mut transfer_buffer).map_err(|_| DrvError::SpiErr)?;
-
-        let upper_byte = transfer_buffer[1] as u16;
-        let lower_byte = transfer_buffer[0] as u16;
-        let received: u16 = (upper_byte << 7) | lower_byte;
 
         self.chip_select_pin.set_high().ok();
         self.delay.delay_us(1000u32);
 
-        return Ok(received);
+        return Ok(transfer_buffer[0]);
     }
 
     pub fn check_faults(&mut self) -> DrvResult {
