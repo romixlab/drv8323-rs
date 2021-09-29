@@ -4,7 +4,8 @@ use hal::digital::v2::{InputPin, OutputPin};
 use crate::registers;
 use crate::faults::{DrvFault};
 use embedded_hal::blocking::delay::DelayUs;
-use crate::registers::DrvRegister;
+use crate::registers::{DrvRegister, PwmMode, DriveControl};
+use crate::registers::DrvRegister::DriverControl;
 
 /// DRV8323 driver
 pub struct DRV8323<SPI, CS, EN, CAL, FAULT, DELAY> {
@@ -20,6 +21,7 @@ pub struct DRV8323<SPI, CS, EN, CAL, FAULT, DELAY> {
 pub enum DrvError {
     SpiErr,
     SpiIsBroken(u16),
+    Verify,
     PinErr,
     DrvFault,
 }
@@ -38,7 +40,6 @@ where
     pub fn new(spi: SPI, mut cs: CS, mut enable: EN, mut cal: CAL, nfault: FAULT, mut delay: DELAY) -> DrvResult<Self> {
         cs.set_high().ok();
         cal.set_low().ok();
-
 
         enable.set_high().ok();
         delay.delay_us(100_u32);
@@ -70,10 +71,18 @@ where
         self.enable_pin.set_low().ok();
     }
 
-    fn read_register(&mut self, reg: DrvRegister) -> DrvResult<u16> {
+    pub fn set_pwm_mode(&mut self, mode: PwmMode) -> DrvResult<()> {
+        self.modify_register(
+            DrvRegister::DriverControl,
+            (mode as u16) << 5,
+            DriveControl::PWM_MODE.bitmask()
+        )
+    }
+
+    pub fn read_register(&mut self, reg: DrvRegister) -> DrvResult<u16> {
         self.chip_select_pin.set_low().ok();
-        let rw_flag = 1u16;
-        let read_command = (rw_flag << 15) | ((reg.addr() as u16) << 11);
+        let read_flag = 1u16;
+        let read_command = (read_flag << 15) | (reg.addr() << 11);
         let mut transfer_buffer = [read_command];
 
         self.spi.transfer(&mut transfer_buffer).map_err(|_| DrvError::SpiErr)?;
@@ -81,7 +90,36 @@ where
         self.chip_select_pin.set_high().ok();
         self.delay.delay_us(1000u32);
 
-        return Ok(transfer_buffer[0]);
+        return Ok(transfer_buffer[0] & 0b111_1111_1111);
+    }
+
+    fn write_register(&mut self, reg: DrvRegister, value: u16) -> DrvResult<()> {
+        let value = value & 0b111_1111_1111;
+
+        self.chip_select_pin.set_low().ok();
+        let write_flag = 0u16;
+        let write_command = (write_flag << 15) | (reg.addr() << 11) | value;
+        let mut transfer_buffer = [write_command];
+
+        self.spi.transfer(&mut transfer_buffer).map_err(|_| DrvError::SpiErr)?;
+
+        self.chip_select_pin.set_high().ok();
+        self.delay.delay_us(1000u32);
+
+        let verify = self.read_register(reg)?;
+        if verify != value {
+            return Err(DrvError::Verify);
+        }
+
+        return Ok(());
+    }
+
+    fn modify_register(&mut self, reg: DrvRegister, value: u16, mask: u16) -> DrvResult {
+        let value = value & 0b111_1111_1111 & mask;
+        let current = self.read_register(reg)?;
+        let modified = (current & !mask) | value;
+        self.write_register(reg, modified)?;
+        Ok(())
     }
 
     pub fn check_faults(&mut self) -> DrvResult {

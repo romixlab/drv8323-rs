@@ -2,6 +2,7 @@ use embedded_hal as hal;
 use hal::blocking::spi;
 use crate::device::DrvResult;
 
+#[derive(Copy, Clone)]
 pub enum DrvRegister {
     FaultStatus1 = 0x00,
     FaultStatus2 = 0x01,
@@ -13,8 +14,8 @@ pub enum DrvRegister {
 }
 
 impl DrvRegister {
-    pub fn addr(self) -> u8 {
-        self as u8
+    pub fn addr(self) -> u16 {
+        self as u16
     }
 }
 
@@ -61,7 +62,7 @@ impl FaultStatus2 {
 }
 
 #[allow(non_camel_case_types)]
-enum DriveControl {
+pub enum DriveControl {
     // Reserved = 0b0000_0010_0000_0000,
     DIS_CPUV = 0b0000_0010_0000_0000,
     DIS_GDF  = 0b0000_0001_0000_0000,
@@ -75,7 +76,7 @@ enum DriveControl {
 }
 
 impl DriveControl {
-    fn bitmask(self) -> u16 {
+    pub fn bitmask(self) -> u16 {
         self as u16
     }
 }
@@ -141,8 +142,9 @@ impl CSAControl {
     }
 }
 
-enum PwmMode {
-    SixPin,
-    ThreePin,
-    OnePin,
+pub enum PwmMode {
+    SixPin = 0b00,
+    ThreePin = 0b01,
+    OnePin = 0b10,
+    Independent = 0b11,
 }

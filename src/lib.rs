@@ -24,7 +24,7 @@
 #![no_std]
 
 mod device;
-mod registers;
+pub mod registers;
 mod faults;
-pub use device::DRV8323;
+pub use device::{DrvResult, DRV8323};
 pub use faults::{DrvFault};
